@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Requisição</title>
+</head>
+<body>
+    <h1>Requisição</h1>
+    <script>
+        fetch("http://localhost:8080/v1/usuarios")
+            .then(response => response.json())
+            .then(data => console.log(data));
+    </script>
+</body>
+</html>
