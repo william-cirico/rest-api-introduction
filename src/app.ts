@@ -1,5 +1,7 @@
 import express from "express";
+import bcrypt from "bcrypt";
 import cors from "cors";
+import { v4 as uuidv4 } from "uuid";
 
 const app = express();
 
@@ -36,6 +38,18 @@ const removeSensitiveDataFromUser = (user: User): Omit<User, "password"> => {
 	const { password, ...filteredUser } = user;
 
 	return filteredUser;
+};
+
+// Função para verificar se o e-mail é válido
+const verifyEmail = (email: string): boolean => {
+	// eslint-disable-next-line no-useless-escape
+	const emailRegex = new RegExp(/^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/);
+	return emailRegex.test(email);
+};
+
+// Função para criptografar um valor
+const hash = (value: string): string => {
+	return bcrypt.hashSync(value, 10);
 };
 
 // Metodo GET: Rota padrão para verificar se a API está rodando
@@ -88,8 +102,102 @@ app.post("/v1/usuarios", (req, res) => {
 	}
 
 	// Validar se o e-mail é válido
+	if (!verifyEmail(req.body.email)) {
+		res.status(400).json({
+			message: "O e-mail precisa ser válido",
+		});
+		return;
+	}
+
 	// Validar se já existe um usuário com aquele e-mail
+	const existingUser = users.find((user) => user.email === req.body.email);
+
+	if (existingUser) {
+		res.status(409).json({
+			message: "Já existe um usuário cadastrado com esse e-mail",
+		});
+		return;
+	}
+
 	// Criptografar a senha
+	const encryptedPassword = hash(req.body.password);
+
+	const user: User = {
+		id: uuidv4(),
+		name: req.body.name,
+		email: req.body.email,
+		password: encryptedPassword,
+	};
+
+	// Criar o registro no BD
+	users.push(user);
+
+	res.status(201).json(removeSensitiveDataFromUser(user)); // 201 -> Quando criar um recurso
+});
+
+// Método PATCH: Rota para atualizar parcialmente um usuário
+app.patch("/v1/usuarios/:id", (req, res) => {
+	// Verificar se o usuário existe
+	const id = req.params.id;
+
+	const existingUserIndex = users.findIndex((user) => user.id === id);
+
+	if (existingUserIndex === -1) {
+		res.status(404).json({
+			message: "Usuário não encontrado",
+		});
+		return;
+	}
+
+	// Verificar se o usuário quer atualizar o e-mail
+	if (req.body.email) {
+		const emailAlreadyRegistered = users.find(
+			(user) => user.email === req.body.email,
+		);
+
+		if (
+			emailAlreadyRegistered &&
+			emailAlreadyRegistered.id !== users[existingUserIndex].id
+		) {
+			res.status(409).json({
+				message: "Já existe um usuário cadastrado com esse e-mail",
+			});
+		}
+	}
+
+	let encryptedPassword = users[existingUserIndex].password;
+	// Verificar se o usuário quer atualizar a senha
+	if (req.body.password) {
+		encryptedPassword = hash(req.body.password);
+	}
+
+	// Atualizar o registro no BD
+	users[existingUserIndex] = {
+		...users[existingUserIndex],
+		...req.body,
+		password: encryptedPassword,
+	};
+
+	res.json(removeSensitiveDataFromUser(users[existingUserIndex]));
+});
+
+// Método DELETE: Rota para remover um usuário
+app.delete("/v1/usuarios/:id", (req, res) => {
+	const id = req.params.id;
+
+	const existingUserIndex = users.findIndex((user) => user.id === id);
+
+	if (existingUserIndex === -1) {
+		res.status(404).json({
+			message: "Usuário não encontrado",
+		});
+		return;
+	}
+
+	// Removendo o usuário do vetor
+	users.splice(existingUserIndex, 1);
+
+	res.status(204).end(); // 204 é o retorno padrão para delete
 });
 
 export default app;
